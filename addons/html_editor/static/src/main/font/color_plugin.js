@@ -198,8 +198,12 @@ export class ColorPlugin extends Plugin {
         };
 
         const hexColor = rgbaToHex(color).toLowerCase();
+        const systemNodesSelector = this.getResource("system_node_selectors").join(", ");
         const selectedNodes = targetedNodes
             .filter((node) => {
+                if (systemNodesSelector && closestElement(node, systemNodesSelector)) {
+                    return false;
+                }
                 if (mode === "backgroundColor" && color) {
                     return !closestElement(node, "table.o_selected_table");
                 }
@@ -435,10 +439,7 @@ export class ColorPlugin extends Plugin {
         if (oldClassName !== newClassName) {
             element.setAttribute("class", newClassName);
         }
-        if (color.startsWith("text") || color.startsWith("bg-")) {
-            element.style[mode] = "";
-            element.classList.add(color);
-        } else if (isColorGradient(color)) {
+        if (isColorGradient(color)) {
             element.style[mode] = "";
             parts.gradient = color;
             if (mode === "color") {
@@ -451,9 +452,14 @@ export class ColorPlugin extends Plugin {
             if (hasGradientStyle && !backgroundImagePartsToCss(parts)) {
                 element.style["background-image"] = "";
             }
-            // Change camelCase to kebab-case.
-            mode = mode.replace("backgroundColor", "background-color");
-            this.applyColorStyle(element, mode, color);
+            if (color.startsWith("text") || color.startsWith("bg-")) {
+                element.style[mode] = "";
+                element.classList.add(color);
+            } else {
+                // Change camelCase to kebab-case.
+                mode = mode.replace("backgroundColor", "background-color");
+                this.applyColorStyle(element, mode, color);
+            }
         }
 
         // It was decided that applying a color combination removes any "color"

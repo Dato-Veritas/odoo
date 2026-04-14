@@ -4800,7 +4800,12 @@ class AccountMove(models.Model):
                 except (UserError, ValueError):
                     _logger.exception("Failed to link bill to purchase order")
 
-        if new and res:
+        if new:
+            # we force an early access token write to prevent edge-cases where the notification
+            # email will fail because the OCR/IAP (async) callback triggers a concurrent update on the same
+            # account move
+            self._portal_ensure_token()
+            self.flush_recordset(['access_token'])
             try:
                 attachments = set(self.attachment_ids + self._from_files_data(files_data + self._unwrap_attachments(files_data)))
                 self.journal_id._notify_invoice_subscribers(
@@ -4817,6 +4822,8 @@ class AccountMove(models.Model):
                 )
             except Exception:
                 _logger.exception("Failed to notify invoice subscribers after EDI import.")
+
+        self._post_process_link_to_purchase_order(self)
 
         return res
 
@@ -4851,6 +4858,11 @@ class AccountMove(models.Model):
         """ Helper to get a reason why an invoice cannot be decoded if it has invoice lines. """
         if self.invoice_line_ids:
             return self.env._("The invoice already contains lines.")
+
+    @api.model
+    def _post_process_link_to_purchase_order(self, invoice):
+        # To be implemented in modules needing to process the invoice after it was linked (or not) to a PO
+        pass
 
     # -------------------------------------------------------------------------
     # BUSINESS METHODS
@@ -5589,6 +5601,12 @@ class AccountMove(models.Model):
             msg = "\n".join([line for line in validation_msgs])
             raise UserError(msg)
 
+        if inactive_analytic_ids := self.line_ids.sudo().with_context(active_test=False).distribution_analytic_account_ids.filtered(lambda a: not a.active):
+            raise UserError(_(
+                "You cannot post an entry with an archived analytic account: %s",
+                ', '.join(inactive_analytic_ids.mapped('name')),
+            ))
+
         if soft:
             future_moves = self.filtered(lambda move: move.date > fields.Date.context_today(self))
             for move in future_moves:
@@ -5724,7 +5742,7 @@ class AccountMove(models.Model):
 
     def _link_bill_origin_to_purchase_orders(self, timeout=10):
         for move in self.filtered(lambda m: m.move_type in self.get_purchase_types()):
-            references = [ref.strip() for ref in re.split(r"[ ,]+", move.invoice_origin)] if move.invoice_origin else []
+            references = re.findall(r"[^,\s]+", move.invoice_origin or "")
             move._find_and_set_purchase_orders(references, move.partner_id.id, move.amount_total, timeout=timeout)
         return self
 
@@ -6872,24 +6890,20 @@ class AccountMove(models.Model):
                     or (partner.user_ids and all(user._is_internal() for user in partner.user_ids))
             )
 
-        def is_right_company(partner):
-            if company:
-                return partner.company_id.id in [False, company.id]
-            return True
+        def filter_found(partner):
+            return not company or partner.company_id.id in [False, company.id] or partner.partner_share
 
         # Search for partner that sent the mail.
         from_mail_addresses = email_split(msg_dict.get('from', ''))
-        partners = self._partner_find_from_emails_single(
-            from_mail_addresses, filter_found=lambda p: is_right_company(p) or not p.partner_share, no_create=True,
-        )
+        partners = self._partner_find_from_emails_single(from_mail_addresses, filter_found=filter_found, no_create=True)
         # if we are in the case when an internal user forwarded the mail manually
         # search for partners in mail's body
-        if partners and is_internal_partner(partners[0]):
+        if partners and is_internal_partner(partners[0]) and (body_mail_addresses := set(email_re.findall(msg_dict.get('body') or ''))):
             # Search for partners in the mail's body.
-            body_mail_addresses = set(email_re.findall(msg_dict.get('body')))
-            partners = self._partner_find_from_emails_single(
-                body_mail_addresses, filter_found=lambda p: is_right_company(p) and p.partner_share, no_create=True,
-            ) if body_mail_addresses else self.env['res.partner']
+            partners = self._partner_find_from_emails_single(body_mail_addresses, filter_found=filter_found, no_create=True)
+
+        # Never return an internal partner
+        partners = partners.filtered(lambda p: not is_internal_partner(p))
 
         # Little hack: Inject the mail's subject in the body.
         if msg_dict.get('subject') and msg_dict.get('body'):
@@ -7041,17 +7055,17 @@ class AccountMove(models.Model):
             force_record_name=force_record_name,
         )
         record = render_context['record']
-        subtitles = [f"{record.name} - {record.partner_id.name}" if record.partner_id.name else record.name]
+        subtitles = [f"{record.display_name} - {record.partner_id.name}" if record.partner_id.name else record.display_name]
         if self.is_invoice(include_receipts=True):
             # Only show the amount in emails for non-miscellaneous moves. It might confuse recipients otherwise.
             if self.invoice_date_due and self.payment_state not in ('in_payment', 'paid'):
                 subtitles.append(_(
                     '%(amount)s due\N{NO-BREAK SPACE}%(date)s',
-                    amount=format_amount(self.env, self.amount_total, self.currency_id, lang_code=render_context.get('lang')),
+                    amount=format_amount(self.env, self.amount_total or self.tax_totals.get('total_amount_currency', 0), self.currency_id, lang_code=render_context.get('lang')),
                     date=format_date(self.env, self.invoice_date_due, lang_code=render_context.get('lang')),
                 ))
             else:
-                subtitles.append(format_amount(self.env, self.amount_total, self.currency_id, lang_code=render_context.get('lang')))
+                subtitles.append(format_amount(self.env, self.amount_total or self.tax_totals.get('total_amount_currency', 0), self.currency_id, lang_code=render_context.get('lang')))
         render_context['subtitles'] = subtitles
         return render_context
 

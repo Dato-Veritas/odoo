@@ -9,8 +9,8 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Odoo Server saas~18.4\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-02-27 18:37+0000\n"
-"PO-Revision-Date: 2026-02-04 13:39+0000\n"
+"POT-Creation-Date: 2026-04-10 18:38+0000\n"
+"PO-Revision-Date: 2026-04-07 09:14+0000\n"
 "Last-Translator: Saara Hakanen <sahak@odoo.com>\n"
 "Language-Team: Finnish <https://translate.odoo.com/projects/odoo-19/"
 "account_peppol/fi/>\n"
@@ -19,7 +19,7 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: \n"
 "Plural-Forms: nplurals=2; plural=n != 1;\n"
-"X-Generator: Weblate 5.14.3\n"
+"X-Generator: Weblate 5.16.2\n"
 
 #. module: account_peppol
 #. odoo-python
@@ -688,7 +688,7 @@ msgstr "Peruuta PEPPOL"
 #. odoo-python
 #: code:addons/account_peppol/models/account_move.py:0
 msgid "Cannot cancel an entry that has already been sent to PEPPOL"
-msgstr "Ei voi peruuttaa kirjausta, joka on jo lähetetty PEPPOLiin"
+msgstr "Et voi peruuttaa kirjausta, joka on jo lähetetty Peppoliin"
 
 #. module: account_peppol
 #. odoo-python
@@ -1233,14 +1233,14 @@ msgstr ""
 msgid ""
 "PEPPOL is the secure standard for e-invoices used in EU and across the world."
 msgstr ""
-"PEPPOL on sähköisten laskujen turvallinen standardi EU:ssa ja muualla "
+"Peppol on sähköisten laskujen turvallinen standardi EU:ssa ja muualla "
 "maailmassa."
 
 #. module: account_peppol
 #: model:ir.model.fields,field_description:account_peppol.field_account_bank_statement_line__peppol_message_uuid
 #: model:ir.model.fields,field_description:account_peppol.field_account_move__peppol_message_uuid
 msgid "PEPPOL message ID"
-msgstr "PEPPOL-viestin tunnus"
+msgstr "Peppol-viestin tunnus"
 
 #. module: account_peppol
 #: model:ir.model.fields,field_description:account_peppol.field_account_bank_statement_line__peppol_move_state
@@ -1440,12 +1440,6 @@ msgstr "Peppolin sähköinen osoite (EAS)"
 
 #. module: account_peppol
 #. odoo-python
-#: code:addons/account_peppol/models/account_edi_proxy_user.py:0
-msgid "Peppol error: %s"
-msgstr "Peppol-virhe: %s"
-
-#. module: account_peppol
-#. odoo-python
 #: code:addons/account_peppol/models/account_edi_common.py:0
 msgid "Peppol invoice received"
 msgstr "Peppol-lasku vastaanotettu"
@@ -1488,12 +1482,10 @@ msgstr "Puhelin"
 #: code:addons/account_peppol/models/res_company.py:0
 msgid ""
 "Please enter the mobile number in the correct international format.\n"
-"For example: +32123456789, where +32 is the country code.\n"
-"Currently, only European countries are supported."
+"For example: +32123456789, where +32 is the country code."
 msgstr ""
 "Kirjoita matkapuhelinnumero oikeassa kansainvälisessä muodossa.\n"
-"Esimerkiksi: +32123456789, jossa +32 on maakoodi.\n"
-"Tällä hetkellä vain Euroopan maat ovat tuettuja."
+"Esimerkiksi: +32123456789, jossa +32 on maakoodi."
 
 #. module: account_peppol
 #. odoo-python
@@ -2141,7 +2133,7 @@ msgstr "UBL 2.0"
 #. module: account_peppol
 #: model:ir.model,name:account_peppol.model_account_edi_xml_ubl_bis3
 msgid "UBL BIS Billing 3.0.12"
-msgstr ""
+msgstr "UBL BIS Billing 3.0.12"
 
 #. module: account_peppol
 #. odoo-python
@@ -2448,6 +2440,8 @@ msgid ""
 "[PEPPOL-EN16931-R010] An electronic address (EAS) must be provided on the "
 "customer '%s'."
 msgstr ""
+"[PEPPOL-EN16931-R010] Sähköinen osoite (EAS) on määritettävä asiakkaalle "
+"'%s'."
 
 #. module: account_peppol
 #. odoo-python
@@ -2456,6 +2450,8 @@ msgid ""
 "[PEPPOL-EN16931-R020] An electronic address (EAS) must be provided on the "
 "company '%s'."
 msgstr ""
+"[PEPPOL-EN16931-R020] Sähköinen osoite (EAS) on määritettävä yritykselle "
+"'%s'."
 
 #. module: account_peppol
 #: model_terms:ir.ui.view,arch_db:account_peppol.peppol_registration_form
@@ -2493,6 +2489,9 @@ msgstr "laskujen lähettämiseksi, mutta tämä"
 #: model_terms:ir.ui.view,arch_db:account_peppol.mail_notification_layout_with_responsible_signature_and_peppol
 msgid "uses"
 msgstr "käyttää"
+
+#~ msgid "Peppol error: %s"
+#~ msgstr "Peppol-virhe: %s"
 
 #~ msgid ""
 #~ "By clicking the button below I accept that Odoo may process my e-invoices."
