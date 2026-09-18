@@ -192,6 +192,7 @@ class ProductProduct(models.Model):
         works as intended :-)
         """
         now = self.env.cr.now()
+        self.fetch(['write_date'])
         for record in self:
             if not record.id:
                 record.write_date = record._origin.write_date
@@ -339,7 +340,10 @@ class ProductProduct(models.Model):
         for product in self:
             product.code = product.default_code
             if read_access:
-                for supplier_info in product.seller_ids:
+                allowed_sellers = product.sudo().seller_ids.filtered(
+                    lambda s: not s.company_id or s.company_id in self.env.companies
+                )
+                for supplier_info in allowed_sellers:
                     if supplier_info.partner_id.id == product.env.context.get('partner_id'):
                         if supplier_info.product_id and supplier_info.product_id != product:
                             # Supplier info specific for another variant.
@@ -1013,7 +1017,7 @@ class ProductProduct(models.Model):
     #=== BUSINESS METHODS ===#
 
     def _prepare_sellers(self, params=False):
-        sellers = self.seller_ids._get_filtered_supplier(self.env.company, self, params)
+        sellers = self.sudo().seller_ids._get_filtered_supplier(self.env.company, self, params)
         return sellers.sorted(lambda s: (s.sequence, -s.min_qty, s.price, s.id))
 
     def _get_filtered_sellers(self, partner_id=False, quantity=0.0, date=None, uom_id=False, params=False):
