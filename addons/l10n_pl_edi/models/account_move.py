@@ -254,15 +254,14 @@ class AccountMove(models.Model):
         correction_info = {}
         if 'KOR' in ksef_type:
             origin = self.reversed_entry_id
-            origin_ksef_id = origin.l10n_pl_edi_ref if origin else False
+            origin_ksef_id = origin.l10n_pl_edi_number if origin else False
 
             correction_info = {
                 'PrzyczynaKorekty': self.ref or 'Korekta',
                 'TypKorekty': '1',
                 'NrFaKorygowanej': origin.name if origin else 'BRAK',
                 'DataWystFaKorygowanej': origin.invoice_date if origin else self.invoice_date,
-                'NrKSeF': origin_ksef_id,
-                'NrKSeFN': '1' if not origin_ksef_id else False,
+                'NrKSeFFaKorygowanej': origin_ksef_id,
             }
 
         return {
@@ -285,7 +284,7 @@ class AccountMove(models.Model):
             'invoice_type': ksef_type,
             'related_invoices': self._l10n_pl_edi_get_related_invoices(),
             'correction_info': correction_info,
-            'special_transactions': {'OSS_Base', 'OSS_Tax', 'Triangular Sale'} & invoice_tag_names,
+            'special_transactions': {'OSS_Base', 'OSS_Tax', 'Triangular Sale', 'K_21', 'K_12'} & invoice_tag_names,
             'triangular_transaction': '1' if 'Triangular Sale' in invoice_tag_names else '2',
             'prefiks_podatnika': bool({'K_21', 'K_12', 'Triangular Sale'} & invoice_tag_names),
             'reverse_charge': any(invoice_line_vals['P_12'] in ('np II', 'oo') for invoice_line_vals in invoice_lines_vals),

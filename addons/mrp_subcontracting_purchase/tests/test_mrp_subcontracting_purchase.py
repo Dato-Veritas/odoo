@@ -138,6 +138,88 @@ class MrpSubcontractingPurchaseTest(TestAccountSubcontractingFlows):
             po_action2 = self.env[action2['res_model']].browse(action2['res_id'])
             self.assertEqual(po_action2, po)
 
+    def test_mixed_mto_subcontracting_source_button(self):
+        """
+        Test the PO/Picking link when a regular and a subcontracted
+        PO are generated to fulfill the component demand of a common MO
+        """
+        mto_route = self.env.ref('stock.route_warehouse0_mto')
+        mto_route.active = True
+        resupply_route = self.env.ref('mrp_subcontracting.route_resupply_subcontractor_mto')
+
+        final_product, regular_product, subcontracted_product, component = self.env['product.product'].create([{
+            'name': 'Final Product',
+            'is_storable': True,
+        }, {
+            'name': 'Regular Product',
+            'is_storable': True,
+            'route_ids': mto_route.ids,
+        }, {
+            'name': 'Subcontracted Product',
+            'is_storable': True,
+            'route_ids': mto_route.ids,
+        }, {
+            'name': 'Component',
+            'is_storable': True,
+            'route_ids': resupply_route.ids,
+        }])
+
+        warehouse = self.env['stock.warehouse'].search([('company_id', '=', self.env.company.id)])
+        self.env['stock.quant']._update_available_quantity(component, warehouse.lot_stock_id, 10)
+
+        self.env['product.supplierinfo'].create([{
+            'partner_id': self.vendor.id,
+            'product_tmpl_id': regular_product.product_tmpl_id.id,
+        }, {
+            'partner_id': self.subcontractor_partner1.id,
+            'product_tmpl_id': subcontracted_product.product_tmpl_id.id,
+        }])
+
+        self.env['mrp.bom'].create([{
+            'product_tmpl_id': final_product.product_tmpl_id.id,
+            'type': 'normal',
+            'bom_line_ids': [
+                Command.create({'product_id': regular_product.id, 'product_qty': 1.0}),
+                Command.create({'product_id': subcontracted_product.id, 'product_qty': 1.0}),
+            ],
+        }, {
+            'product_tmpl_id': subcontracted_product.product_tmpl_id.id,
+            'type': 'subcontract',
+            'subcontractor_ids': [Command.link(self.subcontractor_partner1.id)],
+            'bom_line_ids': [
+                Command.create({'product_id': component.id, 'product_qty': 1.0})
+            ],
+        }])
+
+        mo = self.env['mrp.production'].create({
+            'product_id': final_product.id,
+            'product_qty': 1.0,
+        })
+        mo.action_confirm()
+
+        purchase_orders = mo.move_raw_ids.created_purchase_line_ids.order_id
+        self.assertEqual(len(purchase_orders), 2)
+        purchase_orders.button_confirm()
+
+        regular_po = purchase_orders.filtered(lambda po: po.partner_id == self.vendor)
+        subcontracted_po = purchase_orders.filtered(lambda po: po.partner_id == self.subcontractor_partner1)
+
+        regular_receipt = regular_po.picking_ids
+        subcontract_receipt = subcontracted_po.picking_ids
+        action = subcontracted_po.action_view_subcontracting_resupply()
+        resupply_picking = self.env[action['res_model']].browse(action['res_id'])
+
+        # The regular and subcontracted product receipts should have 0 source POs
+        # The resupply product picking (component) should should have 1
+        self.assertRecordValues(regular_receipt | subcontract_receipt | resupply_picking, [
+            {'subcontracting_source_purchase_count': 0},
+            {'subcontracting_source_purchase_count': 0},
+            {'subcontracting_source_purchase_count': 1},
+        ])
+
+        action = resupply_picking.action_view_subcontracting_source_purchase()
+        self.assertEqual(self.env[action['res_model']].browse(action['res_id']), subcontracted_po)
+
     def test_decrease_qty(self):
         """ Tests when a PO for a subcontracted product has its qty decreased after confirmation
         """
@@ -184,6 +266,44 @@ class MrpSubcontractingPurchaseTest(TestAccountSubcontractingFlows):
         receipt.button_validate()
         self.assertEqual(receipt.state, 'done')
         self.assertEqual(sub_mos.state, 'done')
+
+    def test_multilevel_subcontracting_manufacturing_chain(self):
+        """ Check that the resupply pickings of different subcontractors sharing the same reference don't merge.
+        Finished (Subcontracting - subcontractor_partner1)
+            --> Comp 1
+            --> Comp 2 (MTO, Subcontracting - vendor)
+                    -> Comp2comp
+        """
+        self.warehouse.route_ids = [Command.link(self.env.ref('mrp_subcontracting.route_resupply_subcontractor_mto').id)]
+        self.comp2_bom.write({
+            'type': 'subcontract',
+            'subcontractor_ids': [Command.set(self.vendor.ids)],
+        })
+        mto_route = self.env.ref('stock.route_warehouse0_mto')
+        mto_route.active = True
+        self.comp2.write({
+            'route_ids': [Command.link(mto_route.id)],
+            'seller_ids': [Command.create({'partner_id': self.vendor.id})],
+        })
+        po = self.env['purchase.order'].create({
+            'partner_id': self.subcontractor_partner1.id,
+            'order_line': [Command.create({'product_id': self.finished.id, 'product_qty': 1.0})],
+        })
+
+        po.button_confirm()
+        resupply_finished = po._get_subcontracting_resupplies()
+        self.assertRecordValues(resupply_finished, [{'partner_id': self.subcontractor_partner1.commercial_partner_id.id}])
+        self.assertEqual(resupply_finished.move_ids.product_id, self.comp1 | self.comp2)
+
+        comp2_po = self.env['purchase.order'].search([('partner_id', '=', self.vendor.id)])
+        self.assertEqual(comp2_po.order_line.product_id, self.comp2)
+
+        comp2_po.button_confirm()
+        resupply_comp2 = comp2_po._get_subcontracting_resupplies()
+        self.assertRecordValues(resupply_finished, [{'partner_id': self.subcontractor_partner1.commercial_partner_id.id}])
+        self.assertEqual(resupply_finished.move_ids.product_id, self.comp1 | self.comp2)
+        self.assertRecordValues(resupply_comp2, [{'partner_id': self.vendor.id}])
+        self.assertEqual(resupply_comp2.move_ids.product_id, self.comp2comp)
 
     def test_purchase_and_return01(self):
         """

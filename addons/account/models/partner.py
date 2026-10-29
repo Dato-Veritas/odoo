@@ -26,7 +26,7 @@ _ref_company_registry = {
 class AccountFiscalPosition(models.Model):
     _name = 'account.fiscal.position'
     _description = 'Fiscal Position'
-    _order = 'sequence'
+    _order = 'sequence, id'
     _check_company_auto = True
     _check_company_domain = models.check_company_domain_parent_of
 
@@ -898,7 +898,7 @@ class ResPartner(models.Model):
     @api.model
     def _import_retrieve_customer_from_vat(self, customer_values):
         vat = customer_values.get('vat')
-        if not vat:
+        if not vat or vat in ('/', 'na', 'NA'):
             return
 
         # Sometimes, the vat is specified with some whitespaces or dots.
